@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>CineWheels</title>
+  <meta name="description" content="Trainingssimulator für Kamera-Wheels (Geared Head / Remote Head).">
+  <meta name="theme-color" content="#0b0c0f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CineWheels">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <canvas id="hud"></canvas>
+
+  <!-- ============ Spiel-Oberfläche ============ -->
+  <div id="game-ui" hidden>
+    <div class="topbar">
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">
+        <svg viewBox="0 0 24 24" width="22" height="22"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <div class="readouts">
+        <span class="ro"><b id="ro-focal">35</b><small>mm</small></span>
+        <span class="ro"><small>PAN</small><b id="ro-pan">+0.0°</b></span>
+        <span class="ro"><small>TILT</small><b id="ro-tilt">+0.0°</b></span>
+        <button class="ro ro-btn" id="ro-fmt" aria-label="Bildformat wechseln">2.39:1</button>
+      </div>
+      <div class="status">
+        <div class="st-title" id="st-title">Freies Filmen</div>
+        <div class="st-line" id="st-line">
+          <div class="meter"><div id="st-meter"></div></div>
+          <span id="st-acc">–</span>
+        </div>
+        <div class="timebar" id="st-timebar"><div id="st-time"></div></div>
+      </div>
+      <button id="btn-center" class="icon-btn" aria-label="Kamera zentrieren">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+      </button>
+    </div>
+
+    <div class="lens" id="lens">
+      <div class="zoom" id="zoom" aria-label="Brennweite">
+        <div class="zoom-track"><div class="zoom-fill" id="zoom-fill"></div><div class="zoom-thumb" id="zoom-thumb"></div></div>
+      </div>
+      <div class="primes" id="primes"></div>
+      <div class="lens-lock" id="lens-lock">Objektiv vorgegeben</div>
+    </div>
+
+    <div class="wheel-unit" data-axis="pan">
+      <button class="gear-btn" aria-label="Gang Pan"></button>
+      <div class="wheel"><canvas class="wheel-rot"></canvas><canvas class="wheel-fix"></canvas></div>
+    </div>
+    <div class="wheel-unit" data-axis="tilt">
+      <button class="gear-btn" aria-label="Gang Tilt"></button>
+      <div class="wheel"><canvas class="wheel-rot"></canvas><canvas class="wheel-fix"></canvas></div>
+    </div>
+
+    <div id="countdown" hidden></div>
+  </div>
+
+  <!-- ============ Hauptmenü ============ -->
+  <section id="menu" class="screen">
+    <div class="menu-inner">
+      <header class="brand">
+        <div class="logo">
+          <svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">
+            <circle cx="32" cy="32" r="27" fill="none" stroke="#e8a33d" stroke-width="5"/>
+            <g stroke="#e8a33d" stroke-width="4" stroke-linecap="round"><path d="M32 13v12M32 39v12M13 32h12M39 32h12"/></g>
+            <circle cx="32" cy="32" r="6" fill="#e8a33d"/><circle cx="46" cy="14" r="5" fill="#f3efe6"/>
+          </svg>
+        </div>
+        <div>
+          <h1>Cine<span>Wheels</span></h1>
+          <p class="tagline">Trainingssimulator für Geared-Head-Wheels</p>
+        </div>
+      </header>
+      <div class="mode-cards">
+        <button class="mode-card" data-mode="free">
+          <span class="mc-num">01</span><span class="mc-title">Freies Filmen</span>
+          <span class="mc-desc">Schwenke frei über das Filmset.</span>
+        </button>
+        <button class="mode-card" data-mode="path">
+          <span class="mc-num">02</span><span class="mc-title">Weg folgen</span>
+          <span class="mc-desc">Marker auf dem Pfad im Fadenkreuz halten.</span>
+          <span class="mc-stars" data-stars="path"></span>
+        </button>
+        <button class="mode-card" data-mode="track">
+          <span class="mc-num">03</span><span class="mc-title">Ziel verfolgen</span>
+          <span class="mc-desc">Auto, Läufer und Drohne im Bild halten.</span>
+          <span class="mc-stars" data-stars="track"></span>
+        </button>
+      </div>
+      <div class="menu-row">
+        <button class="btn" id="btn-settings-menu">Einstellungen</button>
+        <button class="btn" id="btn-fullscreen" hidden>Vollbild</button>
+        <button class="btn" id="btn-help">Anleitung</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Levelauswahl ============ -->
+  <section id="levels" class="screen" hidden>
+    <div class="screen-head">
+      <button class="icon-btn" id="btn-levels-back" aria-label="Zurück">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h2 id="levels-title">Weg folgen</h2>
+      <p id="levels-desc"></p>
+    </div>
+    <div class="level-grid scroll" id="level-grid"></div>
+  </section>
+
+  <!-- ============ Einstellungen ============ -->
+  <div id="settings" class="modal" hidden>
+    <div class="modal-box wide">
+      <div class="modal-head">
+        <h2>Einstellungen</h2>
+        <button class="icon-btn" data-close aria-label="Schließen">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body scroll">
+        <div class="set-group">
+          <h3>Wheels</h3>
+          <div class="set-row"><label>Modus</label>
+            <div class="seg" data-setting="wheelMode">
+              <button data-value="realistic">Realistisch</button><button data-value="direct">Direkt</button>
+            </div>
+          </div>
+          <div class="set-row" id="row-damping"><label>Auslauf <small>(Dämpfung)</small></label>
+            <div class="range-wrap"><small>lang</small><input type="range" id="set-damping" min="0.3" max="4" step="0.1"><small>kurz</small></div>
+          </div>
+          <div class="set-row"><label>Wheel-Größe</label>
+            <div class="seg" data-setting="wheelSize">
+              <button data-value="S">S</button><button data-value="M">M</button><button data-value="L">L</button>
+            </div>
+          </div>
+          <div class="set-row"><label>Wheels links/rechts tauschen</label>
+            <button class="toggle" data-setting="swapWheels" aria-label="Wheels tauschen"></button>
+          </div>
+        </div>
+        <div class="set-group">
+          <h3>Pan-Achse</h3>
+          <div class="set-row"><label>Übersetzung</label>
+            <div class="seg" data-setting="pan.gear" data-type="number">
+              <button data-value="1">1 · 15°/U</button><button data-value="2">2 · 30°/U</button><button data-value="3">3 · 60°/U</button>
+            </div>
+          </div>
+          <div class="set-row"><label>Richtung umkehren</label><button class="toggle" data-setting="pan.invert" aria-label="Pan umkehren"></button></div>
+        </div>
+        <div class="set-group">
+          <h3>Tilt-Achse</h3>
+          <div class="set-row"><label>Übersetzung</label>
+            <div class="seg" data-setting="tilt.gear" data-type="number">
+              <button data-value="1">1 · 15°/U</button><button data-value="2">2 · 30°/U</button><button data-value="3">3 · 60°/U</button>
+            </div>
+          </div>
+          <div class="set-row"><label>Richtung umkehren</label><button class="toggle" data-setting="tilt.invert" aria-label="Tilt umkehren"></button></div>
+        </div>
+        <div class="set-group">
+          <h3>Sucher &amp; Grafik</h3>
+          <div class="set-row"><label>Framelines</label>
+            <div class="seg" data-setting="frameline">
+              <button data-value="2.39">2.39:1</button><button data-value="1.78">16:9</button>
+            </div>
+          </div>
+          <div class="set-row"><label>Richtungspfeil zum Ziel</label><button class="toggle" data-setting="guideArrows" aria-label="Richtungspfeil"></button></div>
+          <div class="set-row"><label>Grafikqualität</label>
+            <div class="seg" data-setting="quality">
+              <button data-value="low">Niedrig</button><button data-value="mid">Mittel</button><button data-value="high">Hoch</button>
+            </div>
+          </div>
+        </div>
+        <div class="set-group">
+          <h3>Daten</h3>
+          <div class="set-row buttons">
+            <button class="btn small" id="btn-reset-settings">Standard wiederherstellen</button>
+            <button class="btn small danger" id="btn-reset-best">Bestwerte löschen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Anleitung ============ -->
+  <div id="help" class="modal" hidden>
+    <div class="modal-box wide">
+      <div class="modal-head">
+        <h2>So funktioniert's</h2>
+        <button class="icon-btn" data-close aria-label="Schließen">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body scroll help">
+        <p><b>Kurbeln, nicht wischen.</b> Lege einen Finger auf ein Wheel und fahre im Kreis um die Mitte – wie an einem echten Geared Head. Links ist <b>Pan</b>, rechts <b>Tilt</b> (tauschbar). Beide Wheels gehen gleichzeitig.</p>
+        <p><b>Realistisch:</b> Die Wheels haben Schwungmasse und laufen nach dem Loslassen aus. Kurz antippen stoppt sie. <b>Direkt:</b> Die Kamera folgt 1:1 ohne Trägheit.</p>
+        <p><b>Gänge:</b> Der Knopf über jedem Wheel schaltet die Übersetzung (Grad Kameradrehung pro Wheel-Umdrehung). Für schnelle Ziele höheren Gang wählen.</p>
+        <p><b>Objektiv:</b> Unten in der Mitte per Zoom-Regler oder Festbrennweite (Super 35). In den Leveln ist das Objektiv vorgegeben.</p>
+        <p><b>Score:</b> Gemessen wird laufend der Abstand des Ziels zum Fadenkreuz in Prozent der Bildbreite. Der gestrichelte Kreis ist der Zielbereich.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Pause ============ -->
+  <div id="pause" class="modal" hidden>
+    <div class="modal-box narrow">
+      <h2>Pause</h2>
+      <div class="stack">
+        <button class="btn primary" id="btn-resume">Weiter</button>
+        <button class="btn" id="btn-restart">Neu starten</button>
+        <button class="btn" id="btn-settings-pause">Einstellungen</button>
+        <button class="btn" id="btn-menu">Hauptmenü</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Ergebnis ============ -->
+  <div id="results" class="modal" hidden>
+    <div class="modal-box">
+      <div class="res-head">
+        <p class="res-level" id="res-level"></p>
+        <div class="res-stars" id="res-stars"></div>
+        <p class="res-best" id="res-best" hidden>Neuer Bestwert!</p>
+      </div>
+      <div class="res-grid">
+        <div><small>Genauigkeit</small><b id="res-acc">–</b></div>
+        <div><small>Ø Abweichung</small><b id="res-err">–</b><em>der Bildbreite</em></div>
+        <div><small>Zeit im Zielbereich</small><b id="res-in">–</b><em id="res-in-pct"></em></div>
+        <div><small>Bestwert</small><b id="res-prev">–</b></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="btn-res-levels">Levelauswahl</button>
+        <button class="btn" id="btn-res-retry">Nochmal</button>
+        <button class="btn primary" id="btn-res-next">Nächstes Level</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Hochformat-Hinweis ============ -->
+  <div id="rotate">
+    <svg viewBox="0 0 64 64" width="72" height="72" fill="none" stroke="#e8a33d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="22" y="8" width="20" height="36" rx="3"/><path d="M14 50c6 6 18 8 28 4M42 54l2-6-6-1"/>
+    </svg>
+    <p>Bitte drehen</p>
+    <small>CineWheels läuft im Querformat.</small>
+  </div>
+
+  <noscript><p class="noscript">CineWheels benötigt JavaScript.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
