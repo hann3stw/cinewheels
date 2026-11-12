@@ -29,9 +29,9 @@ Richtungspfeil zum Ziel und Grafikqualität (Pixel Ratio 1 / 1,5 / 2).
 ## Modi
 
 1. **Freies Filmen**: Filmset mit Straße, Häusern, Platz, Passanten, Autos und Drohne. Kein Score.
-2. **Weg folgen**: Ein Marker läuft auf einem sichtbaren Pfad, den du im Fadenkreuz hältst. 6 Level:
+2. **Weg folgen**: Ein Marker läuft auf einem sichtbaren Pfad, den du im Fadenkreuz hältst. 13 Level, u. a.
    Gerade Linie, Diagonale, Kreis, Acht, Wechselndes Tempo, Profi-Acht (85 mm).
-3. **Ziel verfolgen**: Halte bewegte Objekte im Bild. 5 Level: Auto auf dem Rundkurs, Läufer, Drohne,
+3. **Ziel verfolgen**: Halte bewegte Objekte im Bild. 11 Level, u. a. Spaziergänger, Auto, Läufer, Radfahrer, Drohne, Springender Ball,
    Verfolgungsjagd, Drohnen-Akrobatik (85 mm).
 
 In den Leveln ist das Objektiv vorgegeben, damit die Bestwerte vergleichbar bleiben.

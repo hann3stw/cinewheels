@@ -11,10 +11,16 @@ $mime = @{
   '.svg' = 'image/svg+xml'; '.png' = 'image/png'; '.jpg' = 'image/jpeg'; '.ico' = 'image/x-icon'; '.md' = 'text/plain; charset=utf-8'
 }
 
-$listener = New-Object System.Net.HttpListener
-$prefix = if ($Lan) { "http://+:$Port/" } else { "http://localhost:$Port/" }
-$listener.Prefixes.Add($prefix)
-$listener.Start()
+# Ist der Port per "netsh http add urlacl" fuer das Netzwerk reserviert, scheitert der reine
+# localhost-Start mit "Access is denied". Dann wird automatisch die Netzwerk-Variante benutzt.
+$prefixes = if ($Lan) { @("http://+:$Port/") } else { @("http://localhost:$Port/", "http://+:$Port/") }
+$listener = $null
+foreach ($prefix in $prefixes) {
+  $l = New-Object System.Net.HttpListener
+  $l.Prefixes.Add($prefix)
+  try { $l.Start(); $listener = $l; break } catch { }
+}
+if (-not $listener) { Write-Host "Port $Port konnte nicht geoeffnet werden. Anderen Port probieren: -Port 8090"; exit 1 }
 Write-Host "CineWheels läuft auf http://localhost:$Port/  (Strg+C zum Beenden)"
 
 try {

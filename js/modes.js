@@ -1,7 +1,7 @@
 // Spielmodi und Level: Freies Filmen, Weg folgen, Ziel verfolgen.
 import * as THREE from './vendor/three.module.min.js';
 import { dirFromAngles, anglesTo, CAMERA_POS } from './camera.js';
-import { makeCar, spinWheels, makePerson, animatePerson, makeDrone, spinRotors } from './scene.js';
+import { lam, makeCar, spinWheels, makePerson, animatePerson, makeDrone, spinRotors } from './scene.js';
 
 const TAU = Math.PI * 2;
 const PATH_RADIUS = 25; // Abstand des Pfads von der Kamera (m)
@@ -15,6 +15,17 @@ const pingpong = (t, period) => 0.5 - 0.5 * Math.cos((TAU * t) / period); // 0 -
 /** Zeitverzerrung für wechselndes Tempo (monoton, solange amp*freq < 1). */
 const warp = (t, amp, freq) => t + amp * Math.sin(freq * t);
 
+const frac = x => x - Math.floor(x);
+const smooth = k => k * k * (3 - 2 * k);
+/** Dreieckswelle -1..1 mit Periode 1, Start bei -1. */
+const tri = x => 2 * Math.abs(2 * (x - Math.floor(x + 0.5))) - 1;
+/** Stop & Go: n Etappen hin und n zurück, jede dauert segT Sekunden (60 % fahren, 40 % stehen). */
+const stopGo = (t, n, segT) => {
+  const s = t / segT, i = Math.floor(s);
+  const v = (i + smooth(Math.min(1, frac(s) / 0.6))) % (2 * n);
+  return v <= n ? v / n : (2 * n - v) / n;
+};
+
 export const PATH_LEVELS = [
   {
     id: 'path-1', title: 'Gerade Linie', difficulty: 1, focal: 35, duration: 28,
@@ -22,6 +33,13 @@ export const PATH_LEVELS = [
     closed: false,
     shape: u => [lerp(-40, 40, u), 0],
     pos: t => [lerp(-40, 40, pingpong(t, 14)), 0],
+  },
+  {
+    id: 'path-vert', title: 'Senkrechte', difficulty: 1, focal: 35, duration: 25,
+    desc: 'Rauf und runter – nur das Tilt-Wheel.',
+    closed: false,
+    shape: u => [0, lerp(-14, 22, u)],
+    pos: t => [0, lerp(-14, 22, pingpong(t, 10))],
   },
   {
     id: 'path-2', title: 'Diagonale', difficulty: 2, focal: 35, duration: 28,
@@ -45,11 +63,46 @@ export const PATH_LEVELS = [
     pos: t => { const a = TAU * t / 15; return [28 * Math.sin(a), 4 + 10 * Math.sin(2 * a)]; },
   },
   {
+    id: 'path-wave', title: 'Welle', difficulty: 3, focal: 50, duration: 40,
+    desc: 'Langer Schwenk, dabei wogt der Tilt auf und ab.',
+    closed: false,
+    shape: u => [lerp(-38, 38, u), 4 + 9 * Math.sin(TAU * 2.5 * u)],
+    pos: t => { const k = pingpong(t, 20); return [lerp(-38, 38, k), 4 + 9 * Math.sin(TAU * 2.5 * k)]; },
+  },
+  {
+    id: 'path-zigzag', title: 'Zickzack', difficulty: 3, focal: 35, duration: 32,
+    desc: 'Harte Ecken: Der Tilt kehrt schlagartig um.',
+    closed: false,
+    shape: u => [lerp(-36, 36, u), 4 + 9 * tri(3 * u)],
+    pos: t => { const k = pingpong(t, 16); return [lerp(-36, 36, k), 4 + 9 * tri(3 * k)]; },
+  },
+  {
     id: 'path-5', title: 'Wechselndes Tempo', difficulty: 4, focal: 50, duration: 32,
     desc: 'Ellipse, aber der Marker beschleunigt und bremst.',
     closed: true,
     shape: u => [34 * Math.cos(TAU * u), 4 + 14 * Math.sin(TAU * u)],
     pos: t => { const a = TAU * warp(t, 2.6, 0.32) / 13; return [34 * Math.cos(a), 4 + 14 * Math.sin(a)]; },
+  },
+  {
+    id: 'path-stopgo', title: 'Stop & Go', difficulty: 4, focal: 50, duration: 32,
+    desc: 'Der Marker fährt los, hält an, fährt weiter. Sauber anhalten!',
+    closed: false,
+    shape: u => [lerp(-40, 40, u), 2 + 8 * Math.sin(Math.PI * u)],
+    pos: t => { const k = stopGo(t, 4, 4); return [lerp(-40, 40, k), 2 + 8 * Math.sin(Math.PI * k)]; },
+  },
+  {
+    id: 'path-spiral', title: 'Spirale', difficulty: 4, focal: 50, duration: 40,
+    desc: 'Von innen nach außen und zurück – der Radius ändert sich ständig.',
+    closed: false,
+    shape: u => { const a = TAU * 2 * u, r = 4 + 18 * u; return [1.4 * r * Math.cos(a), 4 + 0.75 * r * Math.sin(a)]; },
+    pos: t => { const k = pingpong(t, 40), a = TAU * 2 * k, r = 4 + 18 * k; return [1.4 * r * Math.cos(a), 4 + 0.75 * r * Math.sin(a)]; },
+  },
+  {
+    id: 'path-telecircle', title: 'Tele-Kreis', difficulty: 4, focal: 135, duration: 30,
+    desc: 'Kleiner Kreis mit 135 mm – jede Unruhe ist sofort sichtbar.',
+    closed: true,
+    shape: u => [9 * Math.cos(TAU * u), 4 + 7 * Math.sin(TAU * u)],
+    pos: t => { const a = TAU * t / 15; return [9 * Math.cos(a), 4 + 7 * Math.sin(a)]; },
   },
   {
     id: 'path-6', title: 'Profi-Acht', difficulty: 5, focal: 85, duration: 35,
@@ -58,28 +111,75 @@ export const PATH_LEVELS = [
     shape: u => [22 * Math.sin(TAU * u), 4 + 8 * Math.sin(2 * TAU * u)],
     pos: t => { const a = TAU * warp(t, 3.2, 0.27) / 14; return [22 * Math.sin(a), 4 + 8 * Math.sin(2 * a)]; },
   },
+  {
+    id: 'path-clover', title: 'Kleeblatt', difficulty: 5, focal: 85, duration: 40,
+    desc: 'Vier Blätter durch die Mitte, mit 85 mm.',
+    closed: true,
+    shape: u => { const a = TAU * u, r = Math.cos(2 * a); return [26 * r * Math.cos(a), 4 + 15 * r * Math.sin(a)]; },
+    pos: t => { const a = TAU * t / 26, r = Math.cos(2 * a); return [26 * r * Math.cos(a), 4 + 15 * r * Math.sin(a)]; },
+  },
 ];
+
+const RUN_ROUTE = [[-28, -13], [-10, -13.3], [8, -13], [20, -15], [26, -22], [22, -30], [10, -33], [-2, -28],
+  [-14, -31], [-26, -26], [-32, -18]];
+const WALK_ROUTE = [[-22, -13], [0, -13.2], [22, -13], [27, -18], [12, -21], [-12, -21], [-27, -18]];
+const BIKE_ROUTE = [[-45, -10], [0, -10], [45, -10], [51, -12.8], [45, -15.5], [0, -15.5], [-45, -15.5], [-51, -12.8]];
 
 export const TRACK_LEVELS = [
   {
+    id: 'track-walker', title: 'Spaziergänger', difficulty: 1, focal: 35, duration: 25,
+    desc: 'Zum Aufwärmen: ein Fußgänger in gemütlichem Tempo.',
+    kind: 'person', opts: { route: WALK_ROUTE, vmax: 1.7, shirt: 0x4f8fc0, steady: true },
+  },
+  {
     id: 'track-1', title: 'Auto auf dem Rundkurs', difficulty: 1, focal: 35, duration: 30,
-    desc: 'Ein Auto fährt Runden auf dem Platz.', kind: 'car-oval',
+    desc: 'Ein Auto fährt Runden auf dem Platz.',
+    kind: 'car', opts: { route: 'oval', color: 0xd13b2a, vmax: 10, aLat: 3, acc: 2.5, brake: 4 },
   },
   {
     id: 'track-2', title: 'Läufer', difficulty: 2, focal: 50, duration: 30,
-    desc: 'Ein Jogger mit wechselndem Tempo.', kind: 'runner',
+    desc: 'Ein Jogger mit wechselndem Tempo.',
+    kind: 'person', opts: { route: RUN_ROUTE, vmax: 6.2, shirt: 0xe8641e },
+  },
+  {
+    id: 'track-bike', title: 'Radfahrer', difficulty: 3, focal: 50, duration: 34,
+    desc: 'Fährt dicht an der Kamera vorbei und kommt zurück.',
+    kind: 'bike', opts: { route: BIKE_ROUTE, vmax: 6, aLat: 3 },
   },
   {
     id: 'track-3', title: 'Drohne', difficulty: 3, focal: 35, duration: 30,
-    desc: 'Eine Drohne kreist über dem Platz – Tilt ist gefragt.', kind: 'drone-calm',
+    desc: 'Eine Drohne kreist über dem Platz – Tilt ist gefragt.',
+    kind: 'drone', opts: { flight: 'calm' },
+  },
+  {
+    id: 'track-launch', title: 'Start & Landung', difficulty: 3, focal: 35, duration: 30,
+    desc: 'Die Drohne steigt vom Boden auf und landet wieder – viel Tilt.',
+    kind: 'drone', opts: { flight: 'launch' },
+  },
+  {
+    id: 'track-ball', title: 'Springender Ball', difficulty: 4, focal: 35, duration: 30,
+    desc: 'Hüpft über den Platz. Der Tilt muss im Rhythmus bleiben.',
+    kind: 'ball',
   },
   {
     id: 'track-4', title: 'Verfolgungsjagd', difficulty: 4, focal: 50, duration: 35,
-    desc: 'Schnelles Auto um den Block. Tipp: Gang 3.', kind: 'car-chase',
+    desc: 'Schnelles Auto um den Block. Tipp: Gang 3.',
+    kind: 'car', opts: { route: 'block', color: 0x1f6fd1, vmax: 17, aLat: 6.5, acc: 4, brake: 7 },
+  },
+  {
+    id: 'track-runner-tele', title: 'Läufer im Tele', difficulty: 4, focal: 85, duration: 30,
+    desc: 'Derselbe Jogger, aber mit 85 mm.',
+    kind: 'person', opts: { route: RUN_ROUTE, vmax: 6.2, shirt: 0x9b3fd1 },
+  },
+  {
+    id: 'track-car-tele', title: 'Rundkurs im Tele', difficulty: 5, focal: 85, duration: 30,
+    desc: 'Schnelleres Auto auf dem Rundkurs, mit 85 mm.',
+    kind: 'car', opts: { route: 'oval', color: 0xe0b13c, vmax: 12, aLat: 4, acc: 3, brake: 5 },
   },
   {
     id: 'track-5', title: 'Drohnen-Akrobatik', difficulty: 5, focal: 85, duration: 35,
-    desc: 'Unberechenbare Flugbahn mit 85 mm.', kind: 'drone-wild',
+    desc: 'Unberechenbare Flugbahn mit 85 mm.',
+    kind: 'drone', opts: { flight: 'wild' },
   },
 ];
 
@@ -162,27 +262,48 @@ class CurveFollower {
 // =====================================================================
 // Ziel-Erzeugung für "Ziel verfolgen"
 // =====================================================================
-function createTrackTarget(kind, group) {
-  const target = new THREE.Vector3();
+function makeBike() {
+  const g = new THREE.Group(); // schaut nach +Z
+  const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.05, 12).rotateZ(Math.PI / 2);
+  const wheels = [];
+  for (const z of [-0.52, 0.52]) {
+    const w = new THREE.Mesh(wheelGeo, lam(0x141518));
+    w.position.set(0, 0.34, z);
+    g.add(w); wheels.push(w);
+  }
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.0), lam(0x2fae6b));
+  frame.position.y = 0.62;
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.05), lam(0x1c1d20));
+  bar.position.set(0, 1.0, 0.45);
+  const stem = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.05), lam(0x2fae6b));
+  stem.position.set(0, 0.8, 0.45);
+  const rider = makePerson({ shirt: 0xf2d13a, pants: 0x1c2230 });
+  rider.position.set(0, 0.12, -0.15);
+  g.add(frame, bar, stem, rider);
+  g.userData = { wheels, rider };
+  return g;
+}
 
-  if (kind === 'car-oval' || kind === 'car-chase') {
-    const chase = kind === 'car-chase';
-    const car = makeCar(chase ? 0x1f6fd1 : 0xd13b2a);
+function createTrackTarget(level, group) {
+  const target = new THREE.Vector3();
+  const kind = level.kind, o = level.opts || {};
+
+  if (kind === 'car') {
+    const car = makeCar(o.color);
     group.add(car);
-    let pts;
-    if (chase) {
+    let pts, cap = null;
+    if (o.route === 'block') {
       pts = [[40, -10], [0, -10], [-40, -10], [-60, -12], [-67, -20], [-68, -45], [-66, -70], [-56, -76],
         [0, -76], [56, -76], [66, -70], [68, -45], [67, -20], [60, -12]];
+      cap = (x, z) => (z > -14 ? (x < -8 && x > -22 ? 4 : 9) : 99);
     } else {
       pts = [];
       for (let i = 0; i < 20; i++) {
-        const a = Math.PI / 2 - (i / 20) * TAU; // Start vorne, Fahrt gegen den Uhrzeigersinn (von oben)
+        const a = Math.PI / 2 - (i / 20) * TAU; // Start vorne
         pts.push([31 * Math.cos(a), -44 + 19 * Math.sin(a)]);
       }
     }
-    const f = new CurveFollower(pts, chase
-      ? { vmax: 17, aLat: 6.5, acc: 4, brake: 7, cap: (x, z) => (z > -14 ? (x < -8 && x > -22 ? 4 : 9) : 99) }
-      : { vmax: 10, aLat: 3, acc: 2.5, brake: 4 });
+    const f = new CurveFollower(pts, { vmax: o.vmax, aLat: o.aLat, acc: o.acc, brake: o.brake, cap });
     return {
       target,
       update(t, dt) {
@@ -195,42 +316,85 @@ function createTrackTarget(kind, group) {
     };
   }
 
-  if (kind === 'runner') {
-    const p = makePerson({ shirt: 0xe8641e, pants: 0x1c2230, hair: 0x1a1410 });
+  if (kind === 'person') {
+    const p = makePerson({ shirt: o.shirt, pants: 0x1c2230, hair: 0x1a1410 });
     group.add(p);
-    const pts = [[-28, -13], [-10, -13.3], [8, -13], [20, -15], [26, -22], [22, -30], [10, -33], [-2, -28],
-      [-14, -31], [-26, -26], [-32, -18]];
-    const f = new CurveFollower(pts, { vmax: 6.2, aLat: 4, acc: 2.5, brake: 4, y: 0 });
+    const f = new CurveFollower(o.route, { vmax: o.vmax, aLat: 4, acc: 2.5, brake: 4 });
     let phase = 0;
     return {
       target,
       update(t, dt) {
-        // Tempowechsel: Sprints und Verschnaufen
-        const mul = 0.72 + 0.22 * Math.sin(t * 0.55) + 0.12 * Math.sin(t * 1.7 + 1);
+        // Tempowechsel: Sprints und Verschnaufen (Spaziergänger bleibt gleichmäßig)
+        const mul = o.steady ? 1 : 0.72 + 0.22 * Math.sin(t * 0.55) + 0.12 * Math.sin(t * 1.7 + 1);
         if (dt > 0) f.advance(dt, mul);
-        const ground = Math.abs(f.pos.z) < 14 && f.pos.z < -11.9 ? 0.15 : 0;
+        const ground = f.pos.z > -14 && f.pos.z < -11.9 ? 0.15 : 0; // Gehweg
         p.position.set(f.pos.x, ground, f.pos.z);
         p.rotation.y = Math.atan2(f.tan.x, f.tan.z);
-        phase += f.speed * dt * 2.4;
+        phase += f.speed * dt * (o.steady ? 3.4 : 2.4);
         animatePerson(p, phase, Math.min(1.1, 0.4 + f.speed * 0.15));
         target.set(f.pos.x, ground + 1.25, f.pos.z);
       },
     };
   }
 
+  if (kind === 'bike') {
+    const b = makeBike();
+    group.add(b);
+    const f = new CurveFollower(o.route, { vmax: o.vmax, aLat: o.aLat, acc: 1.5, brake: 3 });
+    let phase = 0;
+    return {
+      target,
+      update(t, dt) {
+        if (dt > 0) f.advance(dt);
+        b.position.copy(f.pos);
+        b.rotation.y = Math.atan2(f.tan.x, f.tan.z);
+        for (const w of b.userData.wheels) w.rotation.x += (f.speed / 0.34) * dt;
+        phase += f.speed * dt * 1.2;
+        animatePerson(b.userData.rider, phase, 0.45);
+        b.userData.rider.userData.parts.torso.rotation.x = 0.35;
+        target.set(f.pos.x, 1.2, f.pos.z);
+      },
+    };
+  }
+
+  if (kind === 'ball') {
+    const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), lam(0xe63946));
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.6, 16).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }));
+    group.add(ball, shadow);
+    return {
+      target,
+      update(t) {
+        const x = 22 * Math.sin(0.35 * t), z = -24 + 4 * Math.sin(0.2 * t);
+        const y = 0.55 + 6 * Math.abs(Math.sin(Math.PI * t / 1.6));
+        ball.position.set(x, y, z);
+        ball.rotation.set(t * 2, 0, -x * 0.8);
+        shadow.position.set(x, 0.03, z);
+        shadow.scale.setScalar(1 - Math.min(0.6, y * 0.08));
+        target.copy(ball.position);
+      },
+    };
+  }
+
   // Drohnen
-  const wild = kind === 'drone-wild';
-  const d = makeDrone(wild ? 1.5 : 1.6);
+  const d = makeDrone(o.flight === 'wild' ? 1.5 : 1.6);
   group.add(d);
-  const posAt = wild
-    ? t => (t *= 0.85, new THREE.Vector3(
+  const flights = {
+    wild: t => (t *= 0.85, new THREE.Vector3(
       26 * Math.sin(0.37 * t) + 4 * Math.sin(1.31 * t + 0.5),
       9 + 5 * Math.sin(0.61 * t + 1) + 1.5 * Math.sin(1.9 * t),
-      -26 + 9 * Math.sin(0.53 * t + 0.3) + 3 * Math.cos(1.1 * t)))
-    : t => new THREE.Vector3(
+      -26 + 9 * Math.sin(0.53 * t + 0.3) + 3 * Math.cos(1.1 * t))),
+    calm: t => new THREE.Vector3(
       24 * Math.sin(0.28 * t),
       10 + 4 * Math.sin(0.43 * t + 1),
-      -34 + 11 * Math.sin(0.55 * t));
+      -34 + 11 * Math.sin(0.55 * t)),
+    // Vom Boden auf 15 m und zurück, zweimal pro Level
+    launch: t => new THREE.Vector3(
+      18 * Math.sin(0.2 * t),
+      0.6 + 14.5 * smooth(0.5 - 0.5 * Math.cos(TAU * t / 15)),
+      -26 + 5 * Math.sin(0.31 * t)),
+  };
+  const posAt = flights[o.flight] || flights.calm;
   return {
     target,
     update(t) {
@@ -316,7 +480,7 @@ export class LevelSession {
     this.level = level;
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.obj = mode === 'path' ? createPathTarget(level, this.group) : createTrackTarget(level.kind, this.group);
+    this.obj = mode === 'path' ? createPathTarget(level, this.group) : createTrackTarget(level, this.group);
     this.phase = 'countdown';
     this.countdown = COUNTDOWN;
     this.time = 0;
