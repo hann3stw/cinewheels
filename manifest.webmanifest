@@ -3,7 +3,7 @@
   "short_name": "CineWheels",
   "description": "Trainingssimulator für Kamera-Wheels (Geared Head / Remote Head).",
   "lang": "de",
-  "id": "./",
+  "id": "/cinewheels/",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
