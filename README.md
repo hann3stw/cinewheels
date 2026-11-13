@@ -34,6 +34,9 @@ Richtungspfeil zum Ziel und Grafikqualität (Pixel Ratio 1 / 1,5 / 2).
 3. **Ziel verfolgen**: Halte bewegte Objekte im Bild. 11 Level, u. a. Spaziergänger, Auto, Läufer, Radfahrer, Drohne, Springender Ball,
    Verfolgungsjagd, Drohnen-Akrobatik (85 mm).
 
+4. **Kranfahrt**: Die Kamera bewegt sich selbst, während du ein Ziel verfolgst. 6 Level: Kran hoch, Kranschwenk,
+   Dolly-Fahrt, Parallelfahrt (Kamera-Auto neben dem Zielauto), Verfolgerfahrt um den Block, Parallelfahrt mit Kran.
+
 In den Leveln ist das Objektiv vorgegeben, damit die Bestwerte vergleichbar bleiben.
 
 ### Score

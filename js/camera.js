@@ -23,8 +23,8 @@ export function dirFromAngles(panDeg, tiltDeg, out = new THREE.Vector3()) {
 }
 
 /** Pan/Tilt (Grad), die von der Kamera auf einen Weltpunkt zeigen. */
-export function anglesTo(worldPos) {
-  const d = worldPos.clone().sub(CAMERA_POS);
+export function anglesTo(worldPos, from = CAMERA_POS) {
+  const d = worldPos.clone().sub(from);
   const pan = Math.atan2(d.x, -d.z) / DEG;
   const tilt = Math.atan2(d.y, Math.hypot(d.x, d.z)) / DEG;
   return { pan, tilt };
@@ -48,6 +48,9 @@ export class CameraRig {
     this.focalTarget = 35;
     this.frame = { x: 0, y: 0, w: 1, h: 1 };
   }
+
+  /** Kameraposition setzen (Kran/Dolly); ohne Argument zurück aufs Stativ. */
+  setPosition(v = CAMERA_POS) { this.camera.position.copy(v); }
 
   addPan(deg) { this.pan += deg; }
   addTilt(deg) { this.tilt = Math.max(-TILT_LIMIT, Math.min(TILT_LIMIT, this.tilt + deg)); }

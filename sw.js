@@ -1,6 +1,6 @@
 // Service Worker: alle App-Dateien vorab cachen -> vollständig offline nutzbar.
 // Bei Änderungen an Dateien VERSION erhöhen, damit Clients die neue Fassung laden.
-const VERSION = 'cinewheels-v2';
+const VERSION = 'cinewheels-v3';
 const ASSETS = [
   './',
   './index.html',

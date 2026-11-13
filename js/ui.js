@@ -83,7 +83,7 @@ export class UI {
     this.levels.hidden = false;
   }
 
-  showGame({ title, free, lensLocked }) {
+  showGame({ title, free, lensLocked, focal }) {
     this.hideAll();
     this.gameUI.hidden = false;
     this.st.title.textContent = title;
@@ -91,6 +91,7 @@ export class UI {
     $('#btn-center').hidden = !free;
     $('#btn-restart').hidden = !!free;
     $('#lens').classList.toggle('locked', !!lensLocked);
+    if (lensLocked) $('#lens-lock').innerHTML = `<b>${focal} mm</b> · Objektiv vorgegeben`;
     this.setLive(null, 0);
   }
 

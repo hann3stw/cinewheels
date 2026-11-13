@@ -1,7 +1,7 @@
 // CineWheels – Einstieg: Renderer, Game-Loop, Zustandsverwaltung.
 import * as THREE from './vendor/three.module.min.js';
 import { settings, onSettingsChange } from './settings.js';
-import { CameraRig } from './camera.js';
+import { CameraRig, CAMERA_POS } from './camera.js';
 import { WheelController } from './wheels.js';
 import { Hud } from './hud.js';
 import { buildWorld } from './scene.js';
@@ -54,6 +54,7 @@ function startFree() {
   clearSession();
   mode = 'free'; level = null;
   world.setAmbientVisible(true);
+  rig.setPosition(CAMERA_POS);
   rig.setAngles(0, 0);
   rig.setFocal(35, true);
   wheels.stopAll();
@@ -67,6 +68,7 @@ function startLevel(modeId, levelId) {
   level = findLevel(levelId);
   world.setAmbientVisible(false);
   session = new LevelSession(scene, modeId, level);
+  rig.setPosition(session.camPos || CAMERA_POS);
   const a = session.startAngles();
   rig.setAngles(a.pan, a.tilt);
   rig.setFocal(level.focal, true);
@@ -74,7 +76,7 @@ function startLevel(modeId, levelId) {
   score.reset();
   lastCountdownShown = null;
   const idx = MODES[modeId].levels.indexOf(level);
-  ui.showGame({ title: `Level ${idx + 1} · ${level.title}`, free: false, lensLocked: true });
+  ui.showGame({ title: `Level ${idx + 1} · ${level.title}`, free: false, lensLocked: true, focal: level.focal });
   state = 'playing';
 }
 
@@ -109,6 +111,7 @@ function toMenu() {
   state = 'menu';
   mode = null; level = null;
   world.setAmbientVisible(true);
+  rig.setPosition(CAMERA_POS);
   rig.setFocal(35, true);
   ui.showMenu();
 }
@@ -155,6 +158,7 @@ function frame(now) {
     world.update(simTime, dt);
     if (session) {
       session.update(dt);
+      if (session.camPos) rig.setPosition(session.camPos);
       if (session.phase === 'countdown') {
         // Während des Countdowns zeigt die Kamera auf den Start – Kurbeln wird ignoriert
         const a = session.startAngles();

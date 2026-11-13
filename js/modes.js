@@ -1,4 +1,4 @@
-// Spielmodi und Level: Freies Filmen, Weg folgen, Ziel verfolgen.
+// Spielmodi und Level: Freies Filmen, Weg folgen, Ziel verfolgen, Kranfahrt.
 import * as THREE from './vendor/three.module.min.js';
 import { dirFromAngles, anglesTo, CAMERA_POS } from './camera.js';
 import { lam, makeCar, spinWheels, makePerson, animatePerson, makeDrone, spinRotors } from './scene.js';
@@ -183,18 +183,134 @@ export const TRACK_LEVELS = [
   },
 ];
 
+// =====================================================================
+// Kranfahrt: Die Kamera bewegt sich (Kran, Dolly, Kamera-Auto), das Ziel auch
+// =====================================================================
+const BLOCK_ROUTE = [[40, -10], [0, -10], [-40, -10], [-60, -12], [-67, -20], [-68, -45], [-66, -70], [-56, -76],
+  [0, -76], [56, -76], [66, -70], [68, -45], [67, -20], [60, -12]];
+
+export const CRANE_LEVELS = [
+  {
+    id: 'crane-rise', title: 'Kran hoch', difficulty: 1, focal: 35, duration: 26,
+    desc: 'Der Kran hebt die Kamera auf 9 m und senkt sie wieder. Ziel: ein Spaziergänger.',
+    crane: 'rise',
+  },
+  {
+    id: 'crane-swing', title: 'Kranschwenk', difficulty: 2, focal: 35, duration: 30,
+    desc: 'Der Kranarm schwenkt über die Straße, das Auto fährt auf dem Rundkurs.',
+    crane: 'swing',
+  },
+  {
+    id: 'crane-dolly', title: 'Dolly-Fahrt', difficulty: 3, focal: 35, duration: 30,
+    desc: 'Die Kamera fährt auf Schienen am Gehweg entlang und begleitet den Läufer.',
+    crane: 'dolly',
+  },
+  {
+    id: 'crane-parallel', title: 'Parallelfahrt', difficulty: 3, focal: 24, duration: 30,
+    desc: 'Kamera-Auto fährt neben dem Zielauto her. Das Ziel zieht vor und fällt zurück.',
+    crane: 'parallel', opts: { relA: 5, relB: 2.5, f: 1.3, lift: 0, sway: 0 },
+  },
+  {
+    id: 'crane-chase', title: 'Verfolgerfahrt', difficulty: 4, focal: 50, duration: 36,
+    desc: 'Das Kamera-Auto folgt dem Ziel um den Block. In den Kurven wandert es aus dem Bild.',
+    crane: 'chase',
+  },
+  {
+    id: 'crane-parallel-arm', title: 'Parallelfahrt mit Kran', difficulty: 5, focal: 35, duration: 32,
+    desc: 'Nebenher fahren, während der Kran hebt, senkt und ausschwenkt.',
+    crane: 'parallel', opts: { relA: 7, relB: 3, f: 1.5, lift: 1.6, sway: 1.0 },
+  },
+];
+
+function createCraneTarget(level, group) {
+  const camPos = new THREE.Vector3();
+  const kind = level.crane;
+
+  // Varianten mit einem Ziel aus "Ziel verfolgen" und einer festen Kamerabahn
+  const simple = {
+    rise: {
+      target: { kind: 'person', opts: { route: WALK_ROUTE, vmax: 1.7, shirt: 0x4f8fc0, steady: true } },
+      cam: t => camPos.set(0, 1.7 + 7.5 * smooth(pingpong(t, 26)), 0),
+    },
+    swing: {
+      target: { kind: 'car', opts: { route: 'oval', color: 0xd13b2a, vmax: 10, aLat: 3, acc: 2.5, brake: 4 } },
+      cam: t => { const a = 0.9 * Math.sin(0.3 * t); return camPos.set(9 * Math.sin(a), 5 + 2.5 * Math.sin(0.21 * t), 4 - 9 * Math.cos(a)); },
+    },
+    dolly: {
+      target: { kind: 'person', opts: { route: RUN_ROUTE, vmax: 6.2, shirt: 0xe8641e } },
+      cam: t => camPos.set(lerp(-18, 18, pingpong(t, 30)), 1.8, -3),
+    },
+  }[kind];
+  if (simple) {
+    const obj = createTrackTarget(simple.target, group);
+    simple.cam(0);
+    return {
+      target: obj.target, camPos,
+      update(t, dt) { obj.update(t, dt); simple.cam(t); },
+    };
+  }
+
+  const target = new THREE.Vector3();
+
+  if (kind === 'parallel') {
+    // Beide fahren die Hauptstraße entlang (+X). Das Ziel pendelt relativ zur Kamera vor und zurück.
+    const o = level.opts;
+    const car = makeCar(0xd13b2a);
+    group.add(car);
+    const V = 9.5, X0 = -140;
+    const rel = t => o.relA * Math.sin(0.3 * o.f * t + 0.4) + o.relB * Math.sin(0.75 * o.f * t + 1);
+    return {
+      target, camPos,
+      update(t, dt) {
+        const base = X0 + V * t;
+        const x = base + rel(t);
+        car.position.set(x, 0, -10.4);
+        car.rotation.y = 0;
+        spinWheels(car, V + (rel(t + 0.05) - rel(t)) / 0.05, dt);
+        target.set(x, 1.0, -10.4);
+        camPos.set(base, 2.2 + o.lift * (1 + Math.sin(0.45 * t - 1.2)), -4.4 + o.sway * (1 + Math.sin(0.33 * t - 1.5)));
+      },
+    };
+  }
+
+  // chase: Kamera-Auto fährt dem Ziel auf derselben Strecke hinterher
+  const car = makeCar(0x1f6fd1);
+  group.add(car);
+  const cfg = { vmax: 13, aLat: 5, acc: 3.5, brake: 6 };
+  const lead = new CurveFollower(BLOCK_ROUTE, cfg);
+  const cam = new CurveFollower(BLOCK_ROUTE, cfg);
+  lead.s = 34; lead.sample();
+  cam.s = 14; cam.sample();
+  return {
+    target, camPos,
+    update(t, dt) {
+      if (dt > 0) { lead.advance(dt); cam.advance(dt, 1 + 0.12 * Math.sin(0.4 * t)); }
+      // Abstand begrenzen, damit das Kamera-Auto weder auffährt noch abreißt
+      const gap = lead.s - cam.s;
+      if (gap < 14) { cam.s = lead.s - 14; cam.sample(); }
+      if (gap > 28) { cam.s = lead.s - 28; cam.sample(); }
+      car.position.copy(lead.pos);
+      car.rotation.y = Math.atan2(-lead.tan.z, lead.tan.x);
+      spinWheels(car, lead.speed, dt);
+      target.set(lead.pos.x, 1.0, lead.pos.z);
+      camPos.set(cam.pos.x, 2.6 + 0.5 * Math.sin(0.5 * t), cam.pos.z);
+    },
+  };
+}
+
 export const MODES = {
   free:  { id: 'free',  title: 'Freies Filmen', desc: 'Schwenke frei über das Filmset. Kein Score.' },
   path:  { id: 'path',  title: 'Weg folgen',    desc: 'Halte den Marker auf dem Pfad im Fadenkreuz.', levels: PATH_LEVELS },
   track: { id: 'track', title: 'Ziel verfolgen', desc: 'Halte Auto, Läufer und Drohne im Bild.', levels: TRACK_LEVELS },
+  crane: { id: 'crane', title: 'Kranfahrt', desc: 'Die Kamera fährt selbst – halte das Ziel trotzdem im Fadenkreuz.', levels: CRANE_LEVELS },
 };
 
 export function findLevel(id) {
-  return [...PATH_LEVELS, ...TRACK_LEVELS].find(l => l.id === id) || null;
+  return [...PATH_LEVELS, ...TRACK_LEVELS, ...CRANE_LEVELS].find(l => l.id === id) || null;
 }
 
 export function nextLevel(id) {
-  for (const list of [PATH_LEVELS, TRACK_LEVELS]) {
+  for (const list of [PATH_LEVELS, TRACK_LEVELS, CRANE_LEVELS]) {
     const i = list.findIndex(l => l.id === id);
     if (i >= 0) return list[i + 1] || null;
   }
@@ -476,11 +592,13 @@ export const COUNTDOWN = 3;
 export class LevelSession {
   constructor(scene, mode, level) {
     this.scene = scene;
-    this.mode = mode;          // 'path' | 'track'
+    this.mode = mode;          // 'path' | 'track' | 'crane'
     this.level = level;
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.obj = mode === 'path' ? createPathTarget(level, this.group) : createTrackTarget(level, this.group);
+    this.obj = mode === 'path' ? createPathTarget(level, this.group)
+      : mode === 'crane' ? createCraneTarget(level, this.group)
+      : createTrackTarget(level, this.group);
     this.phase = 'countdown';
     this.countdown = COUNTDOWN;
     this.time = 0;
@@ -491,7 +609,10 @@ export class LevelSession {
   get duration() { return this.level.duration; }
 
   /** Pan/Tilt, die auf die Startposition zeigen. */
-  startAngles() { return anglesTo(this.obj.target); }
+  startAngles() { return anglesTo(this.obj.target, this.camPos || CAMERA_POS); }
+
+  /** Bewegte Kameraposition (nur Kranfahrt), sonst null. */
+  get camPos() { return this.obj.camPos || null; }
 
   update(dt) {
     if (this.phase === 'countdown') {

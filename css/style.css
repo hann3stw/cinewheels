@@ -181,8 +181,15 @@ button {
 }
 .prime.active { background: var(--accent); color: #1a1206; border-color: var(--accent); }
 .lens-lock { display: none; text-align: center; font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
-.lens.locked .zoom, .lens.locked .primes { opacity: 0.35; pointer-events: none; }
+/* Objektiv vorgegeben: nur eine kleine Anzeige statt der ganzen Bedienfläche */
+.lens.locked .zoom, .lens.locked .primes { display: none; }
 .lens.locked .lens-lock { display: block; }
+.lens.locked {
+  left: 50%; right: auto; transform: translateX(-50%);
+  padding: 6px 14px; border-radius: 16px; white-space: nowrap;
+  pointer-events: none !important;
+}
+.lens-lock b { color: var(--accent); font-weight: 700; }
 
 /* ---------- Countdown ---------- */
 #countdown {
@@ -207,7 +214,7 @@ button {
 .brand h1 { margin: 0; font-size: clamp(30px, 7vh, 52px); letter-spacing: -0.02em; font-weight: 800; }
 .brand h1 span { color: var(--accent); }
 .tagline { margin: 2px 0 0; color: var(--muted); font-size: clamp(13px, 2.6vh, 16px); letter-spacing: 0.04em; }
-.mode-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mode-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .mode-card {
   text-align: left; padding: clamp(12px, 3vh, 22px);
   min-height: clamp(110px, 30vh, 190px);
